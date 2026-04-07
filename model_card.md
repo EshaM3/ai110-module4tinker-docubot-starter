@@ -15,16 +15,19 @@ Use clear, honest descriptions. It is fine if your system is imperfect.
 **What is DocuBot trying to do?**  
 Describe the overall goal in 2 to 3 sentences.
 
-> _Your answer here._
+It will answer questions that the user prompts it with about the documentation. It should give answers that are as concise and accurate as possible.
 
 **What inputs does DocuBot take?**  
 For example: user question, docs in folder, environment variables.
 
-> _Your answer here._
+The docubot is looking at .md and .txt files from a docs folder. When the program runs, it will take user input (a number or letter 'q' to select either the model answering option or to quit, followed by the user's actual question).
 
 **What outputs does DocuBot produce?**
 
-> _Your answer here._
+Based on user choice it can answers questions one of 3 ways:
+- A naive response by analyzing all documents at once
+- Pure snippets of text retrieved from documents that matched best with the question
+- RAG responses (combining top two approaches)
 
 ---
 
@@ -37,12 +40,14 @@ Describe your choices for indexing and scoring.
 - How do you score relevance for a query?
 - How do you choose top snippets?
 
-> _Your answer here._
+To index: It will parse through each word in each document, normalize it (remove plural s's, remove punctuation, and make all words lowercase), and use them as keys in a dictionary. These words will be mapped to the corresponding documents in which they can be found.
+- Words from each next-line section of each document are given a tallied-up score based on appearance of each word from the question. Whichever top 3 sections have the highest scores (and no less than a score of 2) will be used in the final output. A previous next-line section will be included in the output for proper context.
+- Top snippets are chosen using a minimum score value of 2 and the scoring system that I mentioned in the previous bullet point.
 
 **What tradeoffs did you make?**  
 For example: speed vs precision, simplicity vs accuracy.
 
-> _Your answer here._
+It's a very simplified scoring system. In the future, I could have used something like "TF-IDF"
 
 ---
 
@@ -55,12 +60,14 @@ Briefly describe how each mode behaves.
 - Retrieval only mode:
 - RAG mode:
 
-> _Your answer here._
+- Naive: Prepends the question prompt to Gemini with the full corpus text and answers using that jumble of information
+- Retrieval only: Provides snippets of information based on scores for matching words from the question and words from sections of text in the documents
+- RAG: Only uses retrieval snippets of info as LLM input to provide a more accurate, better-organized response
 
 **What instructions do you give the LLM to keep it grounded?**  
 Summarize the rules from your prompt. For example: only use snippets, say "I do not know" when needed, cite files.
 
-> _Your answer here._
+If the score for the retrieved snippets is lower than 2, nothing will be retrieved, defaulting to the "I do not know" response. So, loose answers will not be easily given. Top 3 answers also provides the bot with more chances of retrieving the right pool of information (as opposed to just one answer). All files are cited in the retrieval process.
 
 ---
 
@@ -72,18 +79,19 @@ You can reuse or adapt the queries from `dataset.py`.
 
 | Query | Naive LLM: helpful or harmful? | Retrieval only: helpful or harmful? | RAG: helpful or harmful? | Notes |
 |------|---------------------------------|--------------------------------------|---------------------------|-------|
-| Example: Where is the auth token generated? | | | | |
-| Example: How do I connect to the database? | | | | |
-| Example: Which endpoint lists all users? | | | | |
-| Example: How does a client refresh an access token? | | | | |
+| How do I connect to the database? |harmful|helpful|helpful|Sometimes Naive will just infodump entire documents with information not relevant to the question.|
+| Which endpoint lists all users? |helpful|helpful|helpful|This was a straightforward question with a direct answer.|
+
+(I ran out of credits before getting to experiment extensively)
 
 **What patterns did you notice?**  
 
-- When does naive LLM look impressive but untrustworthy?  
-- When is retrieval only clearly better?  
+- When does naive LLM look impressive but untrustworthy?
+    - When you ask it open-ended questions, it will infodump entire documents at random sections without properly addressing the question.
+- When is retrieval only clearly better?
+    - Straightforward questions with simple answers (otherwise it is a bit hard to get the right context window for the entire answer).
 - When is RAG clearly better than both?
-
-> _Your answer here._
+    - When a detailed explanation is needed for an open-ended question.
 
 ---
 
@@ -96,19 +104,22 @@ For each one, say:
 - What did the system do?  
 - What should have happened instead?
 
-> _Failure case 1 here._
+1. Q: How do I connect to the database?
+- Naive response info-dumped whole document texts instead of addressing problem concisely.
 
-> _Failure case 2 here._
+2. I cannot find the question, but sometimes, if you ask RAG or retrieval a very open-ended question about the documentation, since retrieval may not be able to find sufficient evidence (or the evidence itself might not have captured enough information with its small text window), RAG will also fail since it can only rely on the sometimes unreliable retrieval output.
 
 **When should DocuBot say “I do not know based on the docs I have”?**  
 Give at least two specific situations.
 
-> _Your answer here._
+- You ask a question with only one word that could be relevant to the documentation.
+- You ask a nonsensical question like "Hellooo? Who's there??"
 
 **What guardrails did you implement?**  
 Examples: refusal rules, thresholds, limits on snippets, safe defaults.
 
-> _Your answer here._
+Minimum score limit of 2. Empty response will return an "I don't know."
+Snippets are also only 2 new-line sections.
 
 ---
 
@@ -117,16 +128,15 @@ Examples: refusal rules, thresholds, limits on snippets, safe defaults.
 **Current limitations**  
 List at least three limitations of your DocuBot system.
 
-1. _Limitation 1_
-2. _Limitation 2_
-3. _Limitation 3_
+1. Scoring system too simplistic - word frequency not accounted for
+2. Retrieval output sometimes misses context with its text window
+3. Scoring system too simplistic - Equal scoring weight given to both something like "authentication" and "the"
 
 **Future improvements**  
 List two or three changes that would most improve reliability or usefulness.
 
-1. _Improvement 1_
-2. _Improvement 2_
-3. _Improvement 3_
+1. TD-IDF scoring
+2. Word frequency count in scoring
 
 ---
 
@@ -135,13 +145,13 @@ List two or three changes that would most improve reliability or usefulness.
 **Where could this system cause real world harm if used carelessly?**  
 Think about wrong answers, missing information, or over trusting the LLM.
 
-> _Your answer here._
+If a dev is updating some kind of cybersecurity, medical, or financial app with the help of this program without briefly verifying answers could sometimes lead to large-scale issues (especially if said app is being used by the general public).
 
 **What instructions would you give real developers who want to use DocuBot safely?**  
 Write 2 to 4 short bullet points.
 
-- _Guideline 1_
-- _Guideline 2_
-- _Guideline 3 (optional)_
+- Definitely make sure to briefly cross-verify these output results.
+- Treat its responses more as a guideline for what to look for. 
+- Try to keep your questions concise and relevant to the documentation for best results.
 
 ---

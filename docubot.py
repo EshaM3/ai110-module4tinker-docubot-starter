@@ -45,6 +45,21 @@ class DocuBot:
         return docs
 
     # -----------------------------------------------------------
+    # Token Normalization
+    # -----------------------------------------------------------
+
+    def _normalize(self, word):
+        """
+        Lowercase, strip punctuation, and apply simple stemming.
+        Strips a trailing 's' from words longer than 3 characters
+        so that e.g. 'endpoints' matches 'endpoint'.
+        """
+        word = word.strip(",.!?:;\"'()[]").lower()
+        if len(word) > 3 and word.endswith("s"):
+            word = word[:-1]
+        return word
+
+    # -----------------------------------------------------------
     # Index Construction (Phase 1)
     # -----------------------------------------------------------
 
@@ -64,7 +79,14 @@ class DocuBot:
         ignore punctuation if needed.
         """
         index = {}
-        # TODO: implement simple indexing
+        for filename, text in documents:
+            for word in text.split():
+                word = self._normalize(word)
+                if not word:
+                    continue
+                index.setdefault(word, [])
+                if filename not in index[word]:
+                    index[word].append(filename)
         return index
 
     # -----------------------------------------------------------
@@ -81,19 +103,46 @@ class DocuBot:
         - Count how many appear in the text
         - Return the count as the score
         """
-        # TODO: implement scoring
-        return 0
+        counter = 0
+        text_words = set(self._normalize(w) for w in text.split())
+        for word in query.split():
+            word = self._normalize(word)
+            if word in text_words:
+                counter += 1
+        return counter
 
-    def retrieve(self, query, top_k=3):
+    def retrieve(self, query, top_k=3, min_score=2):
         """
-        TODO (Phase 1):
         Use the index and scoring function to select top_k relevant document snippets.
 
-        Return a list of (filename, text) sorted by score descending.
+        Returns a list of (filename, text) sorted by score descending.
+        Sections scoring below min_score are excluded as insufficient evidence.
         """
-        results = []
-        # TODO: implement retrieval logic
-        return results[:top_k]
+        # Find candidate filenames from the index
+        candidates = set()
+        for word in query.split():
+            word = self._normalize(word)
+            if word in self.index:
+                candidates.update(self.index[word])
+
+        # Score each section of each candidate document
+        doc_lookup = dict(self.documents)
+        scored = []
+        for filename in candidates:
+            sections = doc_lookup[filename].split("\n\n")
+            for i, section in enumerate(sections):
+                section = section.strip()
+                if not section:
+                    continue
+                score = self.score_document(query, section)
+                if score >= min_score:
+                    prev_section = sections.copy()[i - 1].strip() if i > 0 else ""
+                    display = (prev_section + "\n\n" + section).strip() if prev_section else section
+                    scored.append((filename, display, score))
+
+        # Sort by score descending and return top_k as (filename, text)
+        scored.sort(key=lambda x: x[2], reverse=True)
+        return [(filename, text) for filename, text, _ in scored][:top_k]
 
     # -----------------------------------------------------------
     # Answering Modes
